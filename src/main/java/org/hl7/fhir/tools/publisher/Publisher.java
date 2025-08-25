@@ -153,6 +153,7 @@ import org.hl7.fhir.r5.elementmodel.Manager.FhirFormat;
 import org.hl7.fhir.r5.elementmodel.ParserBase;
 import org.hl7.fhir.r5.elementmodel.ParserBase.ValidationPolicy;
 import org.hl7.fhir.r5.elementmodel.ResourceParser;
+import org.hl7.fhir.r5.extensions.ExtensionUtilities;
 import org.hl7.fhir.r5.fhirpath.FHIRPathEngine;
 import org.hl7.fhir.r5.fhirpath.TypeDetails;
 import org.hl7.fhir.r5.formats.FormatUtilities;
@@ -253,7 +254,7 @@ import org.hl7.fhir.r5.utils.NPMPackageGenerator;
 import org.hl7.fhir.r5.utils.NPMPackageGenerator.Category;
 import org.hl7.fhir.r5.utils.QuestionnaireBuilder;
 import org.hl7.fhir.r5.utils.ResourceUtilities;
-import org.hl7.fhir.r5.utils.ToolingExtensions;
+import org.hl7.fhir.r5.extensions.ExtensionDefinitions;
 import org.hl7.fhir.r5.utils.structuremap.StructureMapUtilities;
 import org.hl7.fhir.rdf.RDFValidator;
 import org.hl7.fhir.tools.converters.CDAGenerator;
@@ -1533,8 +1534,8 @@ public class Publisher implements URIResolver, SectionNumberer {
     if (e.hasBinding()) {
       ElementDefinitionBindingComponent b = e.getBinding();
       if (!b.hasDescription() && !b.hasValueSet()) {
-        if (ToolingExtensions.hasExtension(b, BuildExtensions.EXT_BINDING_DEFINITION)) {
-          b.setDescription(ToolingExtensions.readStringExtension(b, BuildExtensions.EXT_BINDING_DEFINITION));
+        if (ExtensionUtilities.hasExtension(b, ExtensionDefinitions.EXT_BINDING_DEFINITION)) {
+          b.setDescription(ExtensionUtilities.readStringExtension(b, ExtensionDefinitions.EXT_BINDING_DEFINITION));
         } else {
           page.getValidationErrors().add(new ValidationMessage(Source.Publisher, IssueType.NOTFOUND, e.getPath(), "No binding description or value set in model " + url, IssueSeverity.ERROR));     
         }
@@ -1900,7 +1901,7 @@ public class Publisher implements URIResolver, SectionNumberer {
     if (sd.getAbstract()) {
       CodeSystemUtilities.setProperty(cs, cd, "http://hl7.org/fhir/type-properties#abstract-type", "abstract-type", new BooleanType(true));
     }
-    if (sd.hasExtension(ToolingExtensions.EXT_RESOURCE_INTERFACE)) {
+    if (sd.hasExtension(ExtensionDefinitions.EXT_RESOURCE_INTERFACE)) {
       CodeSystemUtilities.setProperty(cs, cd, "http://hl7.org/fhir/type-properties#interface", "interface", new BooleanType(true));
     }
     list.add(cd);
@@ -3998,7 +3999,7 @@ public class Publisher implements URIResolver, SectionNumberer {
 
   private boolean checkMetaData(StructureDefinition sd) {
     check(tail(sd.getUrl()).equals(sd.getId()), sd, "id '"+sd.getId()+"' must equal tail of URL '"+sd.getUrl()+"'");
-    check(VersionUtilities.versionsCompatible(page.getVersion().toCode(), sd.getFhirVersion().toCode()), sd, "FhirVersion is wrong (should be "+page.getVersion().toCode()+", is "+sd.getFhirVersion().toCode()+")");
+    check(VersionUtilities.versionMatches(page.getVersion().toCode(), sd.getFhirVersion().toCode()), sd, "FhirVersion is wrong (should be "+page.getVersion().toCode()+", is "+sd.getFhirVersion().toCode()+")");
     switch (sd.getKind()) {
     case COMPLEXTYPE: return checkDataType(sd);
     case PRIMITIVETYPE: return checkDataType(sd);
@@ -4069,8 +4070,8 @@ public class Publisher implements URIResolver, SectionNumberer {
           page.getValidationErrors().add(new ValidationMessage(Source.Publisher, IssueType.INVALID, -1, -1, "Bundle "+bnd.getId(), "URL is non-FHIR "+Integer.toString(i)+" : "+e.getFullUrl()+" should start with http://hl7.org/fhir/ for HL7-defined artifacts",IssueSeverity.WARNING));
         if (e.getResource() instanceof CanonicalResource) {
           CanonicalResource m = (CanonicalResource) e.getResource();
-          ToolingExtensions.removeExtension(m, BuildExtensions.EXT_NOTES);
-          ToolingExtensions.removeExtension(m, BuildExtensions.EXT_INTRODUCTION);
+          ExtensionUtilities.removeExtension(m, BuildExtensions.EXT_NOTES);
+          ExtensionUtilities.removeExtension(m, BuildExtensions.EXT_INTRODUCTION);
           if (m.getWebPath() != null) {
             sdm.seeResource(m.present(), m.getWebPath(), m);
           } else if (bnd.getWebPath() != null) {
@@ -4378,7 +4379,7 @@ public class Publisher implements URIResolver, SectionNumberer {
   private String getExtensionExamples(StructureDefinition ed) throws FileNotFoundException, UnsupportedEncodingException, IOException, Exception {
     List<StringPair> refs = new ArrayList<>();
     for (CanonicalResource cr : page.getWorkerContext().fetchResourcesByType(CanonicalResource.class)) {
-      if (ToolingExtensions.usesExtension(ed.getUrl(), cr) && page.isLocalResource(cr)) {
+      if (ExtensionUtilities.usesExtension(ed.getUrl(), cr) && page.isLocalResource(cr)) {
         refs.add(new StringPair(cr.present(), cr.getWebPath()));
       }
     }
@@ -4420,7 +4421,7 @@ public class Publisher implements URIResolver, SectionNumberer {
   }
 
   private WorkGroup wg(StructureDefinition ed) {
-    return page.getDefinitions().getWorkgroups().get(ToolingExtensions.readStringExtension(ed, ToolingExtensions.EXT_WORKGROUP));
+    return page.getDefinitions().getWorkgroups().get(ExtensionUtilities.readStringExtension(ed, ExtensionDefinitions.EXT_WORKGROUP));
   }
 
   private void copyStaticContent() throws IOException, Exception {
@@ -4824,13 +4825,6 @@ public class Publisher implements URIResolver, SectionNumberer {
           producePage(p, n);
         }
       }
-      try {
-        if (!isAbstract)
-          processQuestionnaire(resource, profile, st, true, "", null);
-      } catch (Exception e) {
-        //      e.printStackTrace();
-        page.log("Questionnaire Generation Failed: "+e.getMessage(), LogMessageType.Error);
-      }
 
       if (!isAbstract || !resource.getExamples().isEmpty()) {
         src = FileUtilities.fileToString(page.getFolders().templateDir + template+"-examples.html");
@@ -5077,58 +5071,6 @@ public class Publisher implements URIResolver, SectionNumberer {
     return XMLUtil.hasNamedChild(XMLUtil.getNamedChild(xdoc.getDocumentElement(), "text"), "div");
   }
 
-  private void processQuestionnaire(ResourceDefn res, StructureDefinition profile, SectionTracker st, boolean isResource, String prefix, ImplementationGuideDefn ig) throws Exception {
-
-    QuestionnaireBuilder qb = new QuestionnaireBuilder(page.getWorkerContext(), "http://hl7.org/fhir");
-    qb.setProfile(profile);
-    qb.build();
-    Questionnaire q = qb.getQuestionnaire();
-
-    String fName = prefix+ profile.getId().toLowerCase() + "-questionnaire";
-    fixCanonicalResource(q, fName);
-    serializeResource(q, fName, true);
-
-    String json = "<div class=\"example\">\r\n<p>Generated Questionnaire for "+profile.getId()+"</p>\r\n<pre class=\"json\" style=\"white-space: pre; overflow: hidden\">\r\n" + Utilities.escapeXml(new JsonParser().setOutputStyle(OutputStyle.PRETTY).composeString(q)) + "\r\n</pre>\r\n</div>\r\n";
-    String html = FileUtilities.fileToString(page.getFolders().templateDir + "template-example-json.html").replace("<%example%>", json);
-    html = page.processPageIncludes(prefix+profile.getId().toLowerCase() + "-questionnaire.json.html", html, (isResource ? "resource-questionnaire:" : "profile-questionnaire:") + profile.getId(), null, null, null, "Questionnaire", ig, res, res == null ? wg("fhir") : res.getWg(), q.fhirType()+"/"+q.getId());
-    FileUtilities.stringToFile(html, page.getFolders().dstDir + prefix+ profile.getId().toLowerCase() + "-questionnaire.json.html");
-
-    String xml = "<div class=\"example\">\r\n<p>Generated Questionnaire for "+profile.getId()+"</p>\r\n<pre class=\"xml\" style=\"white-space: pre; overflow: hidden\">\r\n" + Utilities.escapeXml(new XmlParser().setOutputStyle(OutputStyle.PRETTY).composeString(q)) + "\r\n</pre>\r\n</div>\r\n";
-    html = FileUtilities.fileToString(page.getFolders().templateDir + "template-example-xml.html").replace("<%example%>", xml);
-    html = page.processPageIncludes(prefix+profile.getId().toLowerCase() + "-questionnaire.xml.html", html, (isResource ? "resource-questionnaire:" : "profile-questionnaire:") + profile.getId(), null, null, null, "Questionnaire", ig, res, res == null ? wg("fhir") : res.getWg(), q.fhirType()+"/"+q.getId());
-    FileUtilities.stringToFile(html, page.getFolders().dstDir + prefix+ profile.getId().toLowerCase() + "-questionnaire.xml.html");
-
-    if (false) {
-      File tmpTransform = FileUtilities.createTempFile("tmp", ".html");
-      //    if (web) {
-      HashMap<String, String> params = new HashMap<String, String>();
-      params.put("suppressWarnings", "true");
-      XsltUtilities.saxonTransform(
-          Utilities.path(page.getFolders().rootDir, "implementations", "xmltools"), // directory for xslt references
-          page.getFolders().dstDir + prefix+ profile.getId().toLowerCase() + "-questionnaire.xml",  // source to run xslt on
-          Utilities.path(page.getFolders().rootDir, "implementations", "xmltools", "QuestionnaireToHTML.xslt"), // xslt file to run
-          tmpTransform.getAbsolutePath(), // file to produce
-          this, // handle to self to implement URI resolver for terminology fetching
-          params
-          );
-      //    } else
-      //      FileUtilities.stringToFile("test", tmpTransform.getAbsolutePath());
-
-      // now, generate the form
-      html = FileUtilities.fileToString(page.getFolders().templateDir + (isResource ? "template-questionnaire.html" : "template-profile-questionnaire.html")).replace("<%questionnaire%>", loadHtmlForm(tmpTransform.getAbsolutePath()));
-    } else
-      html = "<html><p>Not generated in this build</p></html>";
-    html = page.processPageIncludes(profile.getId().toLowerCase() + "-questionnaire.html", html, (isResource ? "resource-questionnaire:" : "profile-questionnaire:") + profile.getId(), null, profile, null, "Questionnaire", ig, res, res == null ? wg("fhir") : res.getWg(), q.fhirType()+"/"+q.getId());
-    int level = (ig == null || ig.isCore()) ? 0 : 1;
-    if (st != null)
-      html = insertSectionNumbers(html, st, profile.getId().toLowerCase() + "-questionnaire.html", level, null);
-    FileUtilities.stringToFile(html, page.getFolders().dstDir + prefix+ profile.getId().toLowerCase() + "-questionnaire.html");
-
-    page.getHTMLChecker().registerExternal(prefix+ profile.getId().toLowerCase() + "-questionnaire.html");
-    page.getHTMLChecker().registerExternal(prefix+ profile.getId().toLowerCase() + "-questionnaire.json.html");
-    page.getHTMLChecker().registerExternal(prefix+ profile.getId().toLowerCase() + "-questionnaire.xml.html");
-  }
-
   private String loadHtmlForm(String path) throws Exception {
     String form = FileUtilities.fileToString(path);
     form = form.replace("h5>", "h6>").replace("h4>", "h6>").replace("h3>", "h5>").replace("h2>", "h4>").replace("h1>", "h3>");
@@ -5289,7 +5231,7 @@ public class Publisher implements URIResolver, SectionNumberer {
         ValueSet vs = (ValueSet) loadExample(file);
         fixCanonicalResource(vs, prefix + n, true);
         vs.setUserData("filename", FileUtilities.changeFileExt(file.getName(), ""));
-        vs.addExtension().setUrl(ToolingExtensions.EXT_WORKGROUP).setValue(new CodeType("fhir"));
+        vs.addExtension().setUrl(ExtensionDefinitions.EXT_WORKGROUP).setValue(new CodeType("fhir"));
         if (vs.getUrl().startsWith("http://hl7.org/fhir"))
           vs.setVersion(page.getVersion().toCode());
 
@@ -5317,7 +5259,7 @@ public class Publisher implements URIResolver, SectionNumberer {
           cs.setVersion(page.getVersion().toCode());
         cs.setUserData("example", "true");
         cs.setUserData("filename", FileUtilities.changeFileExt(file.getName(), ""));
-        cs.addExtension().setUrl(ToolingExtensions.EXT_WORKGROUP).setValue(new CodeType("fhir"));
+        cs.addExtension().setUrl(ExtensionDefinitions.EXT_WORKGROUP).setValue(new CodeType("fhir"));
         cs.setWebPath(prefix +n + ".html");
         addToResourceFeed(cs, valueSetsFeed, file.getName());
         page.getCodeSystems().see(cs, page.packageInfo());
@@ -5883,12 +5825,6 @@ public class Publisher implements URIResolver, SectionNumberer {
     page.getHTMLChecker().registerFile(prefix +title + "-mappings.html", "Mappings for StructureDefinition " + profile.getResource().getName(), HTMLLinkChecker.XHTML_TYPE, true);
     FileUtilities.stringToFile(src, page.getFolders().dstDir + prefix +title + "-mappings.html");
 
-    try {
-      processQuestionnaire(resource, profile.getResource(), st, false, prefix, ig);
-    } catch (Exception e) {
-      e.printStackTrace();
-      page.log("Questionnaire Generation Failed: "+e.getMessage(), LogMessageType.Error);
-    }
     new ReviewSpreadsheetGenerator().generate(page.getFolders().dstDir +prefix+ FileUtilities.changeFileExt((String) profile.getResource().getUserData("filename"), "-review.xls"), "HL7 International", page.getGenDate(), profile.getResource(), page);
 
     // xml to xhtml of xml
@@ -6236,7 +6172,7 @@ public class Publisher implements URIResolver, SectionNumberer {
 //    variables.put("de_name", de.getName());
 //    variables.put("de_definition", Utilities.noString(de.getElement().get(0).getDefinition()) ? "??" : de.getElement().get(0).getDefinition());
 //    variables.put("de_code0_code", de.getElement().get(0).getCode().get(0).getCode());
-//    Type ucc = ToolingExtensions.getAllowedUnits(de.getElement().get(0));
+//    Type ucc = ExtensionUtilities.getAllowedUnits(de.getElement().get(0));
 //    if (ucc instanceof CodeableConcept)
 //      variables.put("de_units_code0_code", ((CodeableConcept) ucc).getCoding().get(0).getCode());
 //    else
@@ -6634,19 +6570,23 @@ public class Publisher implements URIResolver, SectionNumberer {
       page.log("Validating "+filesToValidate.size()+" files", LogMessageType.Process);
       
       for (String n : Utilities.sortedCaseInsensitive(filesToValidate.keySet())) {
-        ValidationInformation vi = filesToValidate.get(n);
-        if (vi.getExample() == null) {
-        ei.validate(n, vi.getResourceName());
-        } else if (vi.getProfile() == null) {
-          ei.validate(n, vi.getResourceName());
-          for (ValidationMessage vm : ei.getErrors()) {
-            vi.getExample().getErrors().add(vm);
+        if (new File(Utilities.path(page.getFolders().rootDir, "publish", n + ".json")).exists()) {
+          ValidationInformation vi = filesToValidate.get(n);
+          if (vi.getExample() == null) {
+            ei.validate(n, vi.getResourceName());
+          } else if (vi.getProfile() == null) {
+            ei.validate(n, vi.getResourceName());
+            for (ValidationMessage vm : ei.getErrors()) {
+              vi.getExample().getErrors().add(vm);
+            }
+          } else {
+            ei.validate(n, vi.getResourceName(), vi.getProfile());
+            for (ValidationMessage vm : ei.getErrors()) {
+              vi.getExample().getErrors().add(vm);
+            }
           }
         } else {
-          ei.validate(n, vi.getResourceName(), vi.getProfile());
-          for (ValidationMessage vm : ei.getErrors()) {
-            vi.getExample().getErrors().add(vm);
-          }
+          System.out.println("Ignoring File "+n+" because it doesn't exist");
         }
       }
             
@@ -6915,7 +6855,7 @@ public class Publisher implements URIResolver, SectionNumberer {
   }
 
   private WorkGroup wg(DomainResource dr, String wg) {
-    String code = ToolingExtensions.readStringExtension(dr, ToolingExtensions.EXT_WORKGROUP);
+    String code = ExtensionUtilities.readStringExtension(dr, ExtensionDefinitions.EXT_WORKGROUP);
     return page.getDefinitions().getWorkgroups().get(Utilities.noString(code) ? wg : code);
   }
 
@@ -6971,9 +6911,9 @@ private String csCounter() {
   }
 
 //  if (vs.hasCodeSystem()) {
-//    if (ToolingExtensions.getOID(vs.getCodeSystem()) == null && !Utilities.noString(vs.getUserString("csoid")))
-//      ToolingExtensions.setOID(vs.getCodeSystem(), "urn:oid:"+vs.getUserString("csoid"));
-//    if (ToolingExtensions.getOID(vs.getCodeSystem()) == null)
+//    if (ExtensionUtilities.getOID(vs.getCodeSystem()) == null && !Utilities.noString(vs.getUserString("csoid")))
+//      ExtensionUtilities.setOID(vs.getCodeSystem(), "urn:oid:"+vs.getUserString("csoid"));
+//    if (ExtensionUtilities.getOID(vs.getCodeSystem()) == null)
 //      throw new Exception("No OID on value set define for "+vs.getUrl());
 //  }
 //  if (vs.hasCodeSystem()) {
@@ -7023,7 +6963,7 @@ private String csCounter() {
             cs.getText().setDiv(new XhtmlNode(NodeType.Element));
             cs.getText().getDiv().setName("div");
           }
-          //      if (ToolingExtensions.getOID(cs) == null)
+          //      if (ExtensionUtilities.getOID(cs) == null)
           //        throw new Exception("No OID on code system "+cs.getUrl());
         }
       }
