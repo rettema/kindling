@@ -134,6 +134,11 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
     }
 
     @Override
+    public Base findContainingResource(Object appContext, Base item) {
+      return null;
+    }
+
+    @Override
     public boolean conformsToProfile(FHIRPathEngine engine, Object appContext, Base item, String url) throws FHIRException {
       IResourceValidator val = context.newValidator();
       List<ValidationMessage> valerrors = new ArrayList<ValidationMessage>();
@@ -156,6 +161,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
     public boolean paramIsType(String name, int index) {
       return false;
     }
+
   }
   
   private static final boolean VALIDATE_CONFORMANCE_REFERENCES = true;
@@ -210,7 +216,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
     validator.setAllowExamples(true);
     validator.getSettings().setDebug(false);
     validator.setForPublication(true);
-    validator.setPolicyAdvisor(new BasePolicyAdvisorForFullValidation(ReferenceValidationPolicy.CHECK_TYPE_IF_EXISTS));
+    validator.setPolicyAdvisor(new BasePolicyAdvisorForFullValidation(ReferenceValidationPolicy.CHECK_TYPE_IF_EXISTS, new HashSet<>()));
     
     fpe = new FHIRPathEngine(context);
     fpe.setHostServices(this);
@@ -809,6 +815,11 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   }
 
   @Override
+  public Base findContainingResource(Object appContext, Base item) {
+    return null;
+  }
+
+  @Override
   public boolean conformsToProfile(FHIRPathEngine engine, Object appContext, Base item, String url) throws FHIRException {
     throw new NotImplementedException();
   }
@@ -824,7 +835,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   }
 
   @Override
-  public Set<String> fetchCanonicalResourceVersions(IResourceValidator validator, Object appContext, String url) {
+  public Set<org.hl7.fhir.r5.utils.validation.IValidatorResourceFetcher.ResourceVersionInformation> fetchCanonicalResourceVersions(IResourceValidator validator, Object appContext, String url) {
     return new HashSet<>();
   }
 
@@ -832,7 +843,7 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   public List<StructureDefinition> getImpliedProfilesForResource(IResourceValidator validator, Object appContext,
       String stackPath, ElementDefinition definition, StructureDefinition structure, Element resource, boolean valid,
       IMessagingServices msgServices, List<ValidationMessage> messages) {
-    return new BasePolicyAdvisorForFullValidation(ReferenceValidationPolicy.CHECK_TYPE_IF_EXISTS).getImpliedProfilesForResource(validator, appContext, stackPath, 
+    return new BasePolicyAdvisorForFullValidation(ReferenceValidationPolicy.CHECK_TYPE_IF_EXISTS, new HashSet<>()).getImpliedProfilesForResource(validator, appContext, stackPath, 
         definition, structure, resource, valid, msgServices, messages);
   }
 
@@ -847,6 +858,11 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   }
 
   @Override
+  public Set<String> getCheckReferencesTo() {
+    return Set.of();
+  }
+
+  @Override
   public IValidationPolicyAdvisor getPolicyAdvisor() {
     return null;
   }
@@ -855,7 +871,6 @@ public class ExampleInspector implements IValidatorResourceFetcher, IValidationP
   public IValidationPolicyAdvisor setPolicyAdvisor(IValidationPolicyAdvisor policyAdvisor) {
     return null;
   }
-
 
 }
 

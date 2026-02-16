@@ -38,6 +38,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.r5.context.CanonicalResourceManager;
 import org.hl7.fhir.r5.context.IWorkerContext;
@@ -51,6 +53,7 @@ import org.hl7.fhir.r5.model.StructureDefinition;
 import org.hl7.fhir.r5.model.StructureDefinition.ExtensionContextType;
 import org.hl7.fhir.r5.model.StructureDefinition.StructureDefinitionContextComponent;
 import org.hl7.fhir.r5.model.ValueSet;
+import org.hl7.fhir.utilities.StandardsStatus;
 import org.hl7.fhir.utilities.Utilities;
 import org.hl7.fhir.utilities.VersionUtilities;
 
@@ -85,22 +88,15 @@ public class Definitions {
 
   public class PageInformation {
 
-    private String fmm;
     private String wg;
     private String wgCode;
     private String name;
+    @Getter @Setter private StandardsStatus status;
 
     public PageInformation(String name) {
       super();
       this.name = name;
-    }
-
-    public String getFmm() {
-      return fmm;
-    }
-
-    public void setFmm(String fmm) {
-      this.fmm = fmm;
+      status = StandardsStatus.INFORMATIVE;
     }
 
     public String getWg() {
@@ -127,7 +123,6 @@ public class Definitions {
       this.name = name;
     }
 
-    
   }
 
   public static final String RIM_MAPPING = "http://hl7.org/v3";
@@ -189,7 +184,8 @@ public class Definitions {
   private Map<String, NamespacePair> redirectList = new HashMap<String, NamespacePair>();
   private Map<String, String> badInvariants = new HashMap<>();
   private Map<String, String> allowedSearchTypes = new HashMap<>();
-  
+  public Map<String, String> igList = new HashMap<>();
+
   // Returns the root TypeDefn of a CompositeType or Resource,
 	// excluding future Resources (as they don't have definitions yet).
 	public TypeDefn getElementDefn(String name) throws Exception {
@@ -288,20 +284,30 @@ public class Definitions {
   public Map<String, ResourceDefn> getResourceTemplates() {
     return resourceTemplates;
   }
-  
 
-	public ResourceDefn getResourceByName(String name) throws FHIRException {
-		ResourceDefn root = null;
-		if (resources.containsKey(name))
-			root = resources.get(name);
+
+  public ResourceDefn getResourceByName(String name) throws FHIRException {
+    ResourceDefn root = null;
+    if (resources.containsKey(name))
+      root = resources.get(name);
     if (root == null)
       root = baseResources.get(name);
     if (root == null)
       root = resourceTemplates.get(name);
-		if (root == null)
-			throw new FHIRException("unable to find resource '" + name+"'");
-		return root;
-	}
+    if (root == null)
+      throw new FHIRException("unable to find resource '" + name+"'");
+    return root;
+  }
+  public ResourceDefn getResourceByNameOrNull(String name) throws FHIRException {
+    ResourceDefn root = null;
+    if (resources.containsKey(name))
+      root = resources.get(name);
+    if (root == null)
+      root = baseResources.get(name);
+    if (root == null)
+      root = resourceTemplates.get(name);
+    return root;
+  }
 
 	public boolean hasResource(String name) {
 		return resources.containsKey(name) || baseResources.containsKey(name);
@@ -1002,5 +1008,9 @@ public class Definitions {
 
   public List<Operation> genOpList() {
     return genOpList;
+  }
+
+  public Map<String, String> getIgList() {
+    return igList;
   }
 }
