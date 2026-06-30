@@ -222,6 +222,7 @@ import org.hl7.fhir.utilities.filesystem.CSFileInputStream;
 import org.hl7.fhir.utilities.i18n.RenderingI18nContext;
 import org.hl7.fhir.utilities.npm.FilesystemPackageCacheManager;
 import org.hl7.fhir.utilities.npm.NpmPackage;
+import org.hl7.fhir.utilities.regex.RegexConstants;
 import org.hl7.fhir.utilities.validation.ValidationMessage;
 import org.hl7.fhir.utilities.validation.ValidationMessage.IssueSeverity;
 import org.hl7.fhir.utilities.validation.ValidationMessage.IssueType;
@@ -338,7 +339,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     }
 
     @Override
-    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Base refContext) {
+    public Base resolveReference(FHIRPathEngine engine, Object appContext, String url, Identifier identifier, Base refContext) {
       throw new Error("Not done yet");
     }
 
@@ -2000,7 +2001,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     case 1: return "Business";
     case 2: return "Individual";
     case 3: return "Patient";
-    case 4: return "Not Classified";
+    case 4: return "No Dominant Category";
     case 5: return "Not Applicable";
     default: return "??";
     }
@@ -6723,17 +6724,23 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
               addMappingIssue(logicalPath, unmapped, "unmappedElement", rootException, newExceptionsDoc);
           }
 
-          if (!exceptionsFile.exists())
-            exceptionsFile.createNewFile();
-
-          java.io.Writer writer = new java.io.FileWriter(exceptionsFile);
           final LSSerializer xmlWriter = impl.createLSSerializer();
           xmlWriter.setNewLine("\r\n");
           xmlWriter.getDomConfig().setParameter("format-pretty-print", true);
           xmlWriter.getDomConfig().setParameter("xml-declaration", false);
           String xml = xmlWriter.writeToString(newExceptionsDoc);
-          writer.write(xml);
-          writer.close();
+          // These files live in source/ and their mtime drives the partial-build
+          // change detection. Only write when the content actually changes; an
+          // unconditional rewrite every build bumped the mtime and made every
+          // resource look modified (perpetual partial build).
+          String existingExceptions = exceptionsFile.exists() ? FileUtilities.fileToString(exceptionsFile) : null;
+          if (!xml.equals(existingExceptions)) {
+            if (!exceptionsFile.exists())
+              exceptionsFile.createNewFile();
+            try (java.io.Writer writer = new java.io.FileWriter(exceptionsFile)) {
+              writer.write(xml);
+            }
+          }
         }
       }
     }
@@ -7122,9 +7129,11 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
       sj.add(resource.getPath()+" : "+resource.typeSummary()+" ["+resource.getMin()+".."+resource.getMax()+"]");
     else 
       sj.add("<li>"+resource.getPath()+" : "+resource.typeSummary()+" ["+resource.getMin()+".."+resource.getMax()+"]</li>");
-    if (!logical.getName().equals(edPathTail(resource.getPath()))) {
+/* 
+ * Don't yell about name reasons because there are too many situations where names are legitimately different
+ *    if (!logical.getName().equals(edPathTail(resource.getPath()))) {
       info.nameReason = REASON_UNKNOWN;
-    }
+    }*/
     checkCardinality(logical, light, resource, info, exception, newException, doc, sj);
     if (!light)
       checkType(logical, light, resource, cm, info, exception, newException, doc, sj);
@@ -10268,7 +10277,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
       }
     } else {
       String[] parts = structure.getBaseDefinition().split("#");
-      StructureDefinition profile = new ProfileUtilities(workerContext, null, null).getProfile(structure, parts[0]);
+      StructureDefinition profile = new ProfileUtilities(workerContext, null, null).getProfile(structure, new UriType(parts[0]));
       if (profile != null) {
         if (parts.length == 2) {
           return "<a href=\""+prefix+profile.getUserData("filename")+"."+parts[1]+".html\">the structure "+parts[1]+"</a> in <a href=\""+profile.getUserData("filename")+".html\">the "+profile.getName()+" profile</a>";
@@ -10672,7 +10681,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     }
   }
 
-  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path) throws FHIRException {
+  public BindingResolution resolveBinding(StructureDefinition profile, String ref, String path, org.hl7.fhir.r5.model.Element context) throws FHIRException {
     return resolveBinding(profile, ref, null, path);
   }
 
@@ -10786,7 +10795,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
 
     if (!url.startsWith("#")) {
       String[] path = url.split("#");
-      profile = new ProfileUtilities(workerContext, null, null).getProfile(null, path[0]);
+      profile = new ProfileUtilities(workerContext, null, null).getProfile(null, new UriType(path[0]));
       //      if (profile == null && url.startsWith("StructureDefinition/"))
       //        return "hspc-"+url.substring(8)+".html|"+url.substring(8);
     }
@@ -11570,7 +11579,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
       if (cm.getUrl().startsWith("http://hl7.org/fhir"))
         definitions.addNs(cm.getUrl(), "Concept Map"+cm.getName(), cm.getWebPath());
     for (StructureDefinition sd : profiles.getList())
-      if (sd.getUrl().startsWith("http://hl7.org/fhir") && !definitions.getResourceTemplates().containsKey(sd.getName()))
+      if (sd.getUrl().startsWith("http://hl7.org/fhir") && !definitions.getResourceTemplates().containsKey(sd.getName()) && !isExtensionPack(sd))
         definitions.addNs(sd.getUrl(), "Profile "+sd.getName(), sd.getWebPath());
     //    for (StructureDefinition sd : workerContext.getExtensionDefinitions())
     //      if (sd.getUrl().startsWith("http://hl7.org/fhir"))
@@ -11609,6 +11618,10 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
     b.append("</table>\r\n");
     b.append("<p>"+Integer.toString(list.size())+" Entries</p>\r\n");
     return b.toString();
+  }
+
+  public boolean isExtensionPack(StructureDefinition sd) {
+    return sd.getSourcePackage() != null && "hl7.fhir.uv.extensions".equals(sd.getSourcePackage().getId());
   }
 
   private String hsplt(String s) {
@@ -12241,7 +12254,7 @@ public class PageProcessor implements Logger, ProfileKnowledgeProvider, IReferen
         }
       }
     }
-    if (parts.length == 2 && definitions.hasResource(parts[0]) && parts[1].matches(FormatUtilities.ID_REGEX)) {
+    if (parts.length == 2 && definitions.hasResource(parts[0]) && parts[1].matches(RegexConstants.ID_REGEX)) {
       Example ex = null;
       try {
         ex = findExample(parts[0], parts[1]);

@@ -527,7 +527,7 @@ public class ProfileGenerator {
     p.setAbstract(false);
     p.setUserData("filename", "xhtml");
     p.setWebPath("narrative.html#xhtml");
-    p.setBaseDefinition("http://hl7.org/fhir/StructureDefinition/Element");
+    p.setBaseDefinition("http://hl7.org/fhir/StructureDefinition/PrimitiveType");
     p.setType("xhtml");
     p.setDerivation(TypeDerivationRule.SPECIALIZATION);
     p.setFhirVersion(version);
@@ -558,6 +558,11 @@ public class ProfileGenerator {
     ec.setDefinition("XHTML");
     ec.setMin(0);
     ec.setMax("*");
+    ec = new ElementDefinition();
+    p.getDifferential().getElement().add(ec);
+    ec.setId("xhtml"+".id");
+    ec.setPath("xhtml"+".id");
+    ec.setMax("0");
     ec = new ElementDefinition();
     p.getDifferential().getElement().add(ec);
     ec.setId("xhtml"+".extension");
@@ -600,7 +605,7 @@ public class ProfileGenerator {
     ec2.addRepresentation(PropertyRepresentation.XMLATTR);
     ec2.setDefinition("unique id for the element within a resource (for internal references)");
     ec2.setMin(0);
-    ec2.setMax("1");
+    ec2.setMax("0");
     ec2.setShort("xml:id (or equivalent in JSON)");
     TypeRefComponent tr = ec2.addType();
     t.getFormatCommentsPre().add("Note: special primitive values have a FHIRPath system type. e.g. this is compiler magic (e)");
@@ -1068,6 +1073,9 @@ public class ProfileGenerator {
     if (r.isInterface()) {
       ExtensionUtilities.addBooleanExtension(p, ExtensionDefinitions.EXT_RESOURCE_INTERFACE, true);       
     }
+    for (String tc : r.getTypeCharacteristics()) {
+      p.addExtension(ExtensionDefinitions.EXT_TYPE_CHARACTERISTICS, new CodeType(tc));
+    }
     IniFile cini = new IniFile(Utilities.path(rootFolder, "temp", "categories.ini"));
     String cat = cini.getStringProperty("category", r.getName());
     if (!Utilities.noString(cat))
@@ -1373,7 +1381,7 @@ public class ProfileGenerator {
       sp.setWebPath(p.getName().toLowerCase()+"-search.html#"+sp.getId());        
       sp.setUrl("http://hl7.org/fhir/SearchParameter/"+sp.getId());
       sp.setVersion(version.toCode());
-      if (context.getSearchParameter(sp.getUrl()) != null)
+      if (context.fetchResource(SearchParameter.class, p.getUrl()) != null)
         throw new Exception("Duplicated Search Parameter "+sp.getUrl());
       context.cacheResource(sp);
       spd.setResource(sp);
@@ -1770,7 +1778,7 @@ public class ProfileGenerator {
       ce.addExtension(ExtensionDefinitions.EXT_TRANSLATABLE, new BooleanType(true));
     }
 
-    if (Utilities.existsInList(ce.getPath(), "Element.extension", "DomainResource.extension", "DomainResource.modifierExtension") && !ce.hasSlicing() && !ce.hasSliceName()) {
+    if ((ce.getPath().endsWith(".extension") || ce.getPath().endsWith(".modifierExtension")) && !ce.hasSlicing() && !ce.hasSliceName()) {
       ce.getSlicing().setDescription("Extensions are always sliced by (at least) url").setRules(SlicingRules.OPEN).addDiscriminator().setType(DiscriminatorType.VALUE).setPath("url");
     }
     if (!Utilities.noString(inheritedType) && snapshot != SnapShotMode.None) {
@@ -2153,7 +2161,7 @@ public class ProfileGenerator {
           ed.getBase().setMin(child.getMinCardinality());
         if (child.getMaxCardinality() != null)
           ed.getBase().setMax(child.getMaxCardinality() == Integer.MAX_VALUE ? "*" : child.getMaxCardinality().toString());
-        if (snapshot == SnapShotMode.DataType && ed.getPath().endsWith(".extension") && !ed.hasSlicing())
+        if (ed.getPath().endsWith(".extension") && !ed.hasSlicing())
           ed.getSlicing().setDescription("Extensions are always sliced by (at least) url").setRules(SlicingRules.OPEN).addDiscriminator().setType(DiscriminatorType.VALUE).setPath("url");
       }
     }
